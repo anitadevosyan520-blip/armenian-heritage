@@ -11,7 +11,7 @@ from datetime import datetime
 app = FastAPI(title="Հայkakan Zharangutyun API", version="1.0.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-DATA_PATH = os.path.join(os.path.dirname(__file__), "data.json")
+DATA_PATH = os.path.join(os.path.dirname(__file__), "churches.json")
 
 def parse_century(s: str) -> Optional[int]:
     if not s or s in ("-", ""): return None
@@ -76,7 +76,7 @@ def list_churches(search: Optional[str]=None, country: Optional[str]=None,
     if type:    items = [c for c in items if c["type"] == type]
     if state:   items = [c for c in items if c["state"] == state]
     if century is not None: items = [c for c in items if c.get("century") == century]
-    return {"total": len(items), "items": items[skip:skip+limit]}
+    return {"total": len(items), "data": items[skip:skip+limit]}
 
 @app.get("/api/filters")
 def filters():

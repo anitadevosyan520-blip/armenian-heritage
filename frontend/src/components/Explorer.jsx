@@ -211,7 +211,7 @@ export default function Explorer({ churches, stats }) {
           <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 40 }}>
             <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
               style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid var(--stone-light)', background: 'var(--cream)', cursor: page === 1 ? 'not-allowed' : 'pointer', opacity: page === 1 ? 0.5 : 1, fontFamily: 'Nunito' }}>
-              ← Prev
+              ← Նախորդ էջ
             </button>
             {Array.from({ length: Math.min(7, totalPages) }, (_, i) => {
               let p
@@ -228,7 +228,7 @@ export default function Explorer({ churches, stats }) {
             })}
             <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
               style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid var(--stone-light)', background: 'var(--cream)', cursor: page === totalPages ? 'not-allowed' : 'pointer', opacity: page === totalPages ? 0.5 : 1, fontFamily: 'Nunito' }}>
-              Next →
+              Հաջորջ էջ →
             </button>
           </div>
         )}

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import {
-  BarChart, Bar, PieChart, Pie, Cell, RadarChart, Radar, PolarGrid, PolarAngleAxis,
+  BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from 'recharts'
 
@@ -10,11 +10,12 @@ const COLORS = ['#8B1A2B','#C9A574','#5C0F1C','#D4C4B0','#3D2B1F','#EDD9A3','#A8
 const STATE_COLORS = { 'Կանգուն':'#2E7D32', 'Ավերված':'#B71C1C', 'Կիսավեր':'#F57F17', 'Չկան տեղեկություններ':'#757575' }
 const STATE_CLASSES = { 'Կանգուն':'tag-standing', 'Ավերված':'tag-ruined', 'Կիսավեր':'tag-semi', 'Չկան տեղեկություններ':'tag-unknown' }
 const TABS = [
-  { id:'catalog',   label:'Կատալոգ',        icon:'⛪' },
-  { id:'timeline',  label:'Ժամանակագր.',     icon:'📅' },
-  { id:'stats',     label:'Վիճակագրություն', icon:'📊' },
-  { id:'chat',      label:'Զրուցարան',       icon:'💬' },
-  { id:'submit',    label:'Ավելացնել',        icon:'➕' },
+  { id:'catalog',   label:'Կատալոգ' },
+  { id:'map',       label:'Քարտեզ' },
+  { id:'timeline',  label:'Ժամանակագրություն' },
+  { id:'stats',     label:'Վիճակագրություն' },
+  { id:'chat',      label:'Զրուցարան'},
+  { id:'submit',    label:'Ավելացնել'},
 ]
 
 /* ─── Helpers ────────────────────────────────────────────────────── */
@@ -88,73 +89,168 @@ function ChurchCard({ church, onClick }) {
   )
 }
 
-/* ─── Church Detail Modal ────────────────────────────────────────── */
-function ChurchModal({ church, onClose }) {
+/* ─── Church Drawer (slide from right) ──────────────────────────── */
+function ChurchDrawer({ church, onClose }) {
   const [imgErr, setImgErr] = useState(false)
+  const [visible, setVisible] = useState(false)
+
+  useEffect(() => {
+    if (church) {
+      // tiny delay so the CSS transition fires
+      requestAnimationFrame(() => setVisible(true))
+    } else {
+      setVisible(false)
+    }
+  }, [church])
+
+  const handleClose = () => {
+    setVisible(false)
+    setTimeout(onClose, 320)
+  }
+
   if (!church) return null
+
+  const details = [
+    { icon: '🏛️', label: 'Տեսակ',               value: church.type },
+    { icon: '🌍', label: 'Երկիր',               value: church.country },
+    { icon: '📍', label: 'Քաղաք / Գյուղ',       value: church.city },
+    { icon: '📅', label: 'Կառուցման տարեթիվ',   value: church.building_year },
+    { icon: '🗺️', label: 'Տեղագրություն',        value: church.location },
+  ].filter(d => d.value)
+
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={e => e.stopPropagation()}>
-        <div style={{ position:'relative' }}>
-          <div style={{ height: 260, overflow:'hidden', background:'var(--parchment)' }}>
-            {church.picture && !imgErr ? (
-              <img src={church.picture} alt={church.name}
-                onError={() => setImgErr(true)}
-                style={{ width:'100%', height:'100%', objectFit:'cover' }} />
-            ) : (
-              <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100%' }}>
-                <ArmenianCross size={100} color="#8B1A2B" />
-              </div>
-            )}
-          </div>
-          <button onClick={onClose} style={{
-            position:'absolute', top:12, right:12,
-            background:'rgba(26,10,5,0.6)', border:'none', borderRadius:'50%',
-            width:36, height:36, cursor:'pointer', color:'#EDD9A3', fontSize:'1.1rem',
-            display:'flex', alignItems:'center', justifyContent:'center'
-          }}>✕</button>
+    <>
+      {/* dim backdrop */}
+      <div
+        onClick={handleClose}
+        style={{
+          position:'fixed', inset:0, zIndex:200,
+          background: visible ? 'rgba(26,10,5,0.45)' : 'rgba(26,10,5,0)',
+          backdropFilter: visible ? 'blur(3px)' : 'none',
+          transition:'background 0.32s, backdrop-filter 0.32s',
+        }}
+      />
+
+      {/* drawer panel */}
+      <div style={{
+        position:'fixed', top:0, right:0, bottom:0, zIndex:201,
+        width: '50%',
+        minWidth: 420,
+        background:'var(--cream)',
+        boxShadow:'-8px 0 40px rgba(26,10,5,0.25)',
+        transform: visible ? 'translateX(0)' : 'translateX(100%)',
+        transition:'transform 0.32s cubic-bezier(0.4,0,0.2,1)',
+        display:'flex', flexDirection:'column',
+        overflowY:'auto',
+      }}>
+
+        {/* close button — top-right corner of drawer */}
+        <button onClick={handleClose} style={{
+          position:'absolute', top:14, right:14, zIndex:202,
+          width:38, height:38, borderRadius:'50%',
+          background:'rgba(26,10,5,0.6)', border:'none', cursor:'pointer',
+          color:'#EDD9A3', fontSize:'1.1rem',
+          display:'flex', alignItems:'center', justifyContent:'center',
+          backdropFilter:'blur(6px)',
+          boxShadow:'0 2px 12px rgba(0,0,0,0.3)',
+        }}>✕</button>
+
+        {/* inner centering wrapper */}
+        <div style={{ display:'flex', flexDirection:'column', flex:1 }}>
+
+        {/* Hero image */}
+        <div style={{ position:'relative', height:340, flexShrink:0, background:'var(--parchment)' }}>
+          {church.picture && !imgErr ? (
+            <img
+              src={church.picture} alt={church.name}
+              onError={() => setImgErr(true)}
+              style={{ width:'100%', height:'100%', objectFit:'cover' }}
+            />
+          ) : (
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100%', opacity:0.35 }}>
+              <ArmenianCross size={120} color="#8B1A2B" />
+            </div>
+          )}
+          {/* gradient scrim */}
+          <div style={{
+            position:'absolute', bottom:0, left:0, right:0, height:100,
+            background:'linear-gradient(transparent, var(--cream))',
+          }}/>
         </div>
-        <div style={{ padding:'24px 28px 28px' }}>
-          <div style={{ display:'flex', gap:10, marginBottom:14, flexWrap:'wrap' }}>
+
+        {/* Content */}
+        <div style={{ padding:'0 28px 36px', flex:1 }}>
+
+          {/* Badges */}
+          <div style={{ display:'flex', gap:8, marginBottom:14, flexWrap:'wrap' }}>
             <span style={{
               background:'var(--crimson)', color:'var(--cream)',
-              padding:'3px 12px', borderRadius:4,
-              fontFamily:'Cinzel,serif', fontSize:'0.72rem', letterSpacing:'0.07em'
+              padding:'3px 14px', borderRadius:20,
+              fontFamily:'Cinzel,serif', fontSize:'0.7rem', letterSpacing:'0.08em'
             }}>{church.type}</span>
             <span className={`tag ${stateClass(church.state)}`}>{church.state || '—'}</span>
           </div>
-          <h2 style={{ fontFamily:'Cinzel Decorative,serif', fontSize:'1.25rem', color:'var(--crimson)', marginBottom:6, lineHeight:1.3 }}>
+
+          {/* Name */}
+          <h2 style={{
+            fontFamily:'Cinzel Decorative,serif', fontSize:'1.15rem',
+            color:'var(--crimson)', lineHeight:1.35, marginBottom:20,
+          }}>
             {church.name}
           </h2>
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'8px 16px', margin:'16px 0', fontSize:'0.88rem' }}>
-            {[
-              ['🏛️ Տեսակ', church.type],
-              ['🌍 Երկիր', church.country],
-              ['📍 Քաղաք', church.city],
-              ['📅 Կառ. թ.', church.building_year],
-              ['🗺️ Կոորդ.', church.location],
-              ['🔢 Դার', church.century ? `${church.century}-ին դ.` : '—'],
-            ].map(([k, v]) => v && (
-              <div key={k}>
-                <span style={{ color:'var(--text-light)', fontFamily:'Cinzel,serif', fontSize:'0.72rem' }}>{k}</span>
-                <p style={{ color:'var(--text-dark)', fontWeight:500 }}>{v}</p>
+
+          {/* Ornament */}
+          <div style={{
+            height:1,
+            background:'linear-gradient(to right, transparent, var(--gold), transparent)',
+            margin:'0 0 20px',
+          }}/>
+
+          {/* Detail rows */}
+          <div style={{ display:'flex', flexDirection:'column', gap:12, marginBottom:24 }}>
+            {details.map(({ icon, label, value }) => (
+              <div key={label} style={{
+                display:'flex', alignItems:'flex-start', gap:12,
+                background:'var(--warm-white)', borderRadius:8, padding:'10px 14px',
+                border:'1px solid var(--parchment)',
+              }}>
+                <span style={{ fontSize:'1rem', marginTop:1, flexShrink:0 }}>{icon}</span>
+                <div>
+                  <div style={{ fontFamily:'Cinzel,serif', fontSize:'0.65rem', color:'var(--text-light)', letterSpacing:'0.1em', marginBottom:2 }}>
+                    {label.toUpperCase()}
+                  </div>
+                  <div style={{ fontSize:'0.9rem', color:'var(--text-dark)', fontWeight:500 }}>{value}</div>
+                </div>
               </div>
             ))}
           </div>
+
+          {/* Info block */}
           {church.info && church.info !== '-' && (
-            <div style={{
-              borderTop:'1px solid var(--parchment)', paddingTop:16, marginTop:8,
-              fontSize:'0.9rem', color:'var(--text-medium)', lineHeight:1.7
-            }}>
-              <p style={{ fontFamily:'Cinzel,serif', fontSize:'0.72rem', color:'var(--gold)', letterSpacing:'0.1em', marginBottom:8 }}>
-                ԾԱՆՈԹ. ՏԵՂԵԿՈՒԹՅՈՒՆ
+            <>
+              <div style={{
+                height:1,
+                background:'linear-gradient(to right, transparent, var(--gold), transparent)',
+                margin:'0 0 16px',
+              }}/>
+              <p style={{
+                fontFamily:'Cinzel,serif', fontSize:'0.65rem', color:'var(--gold)',
+                letterSpacing:'0.12em', marginBottom:10,
+              }}>
+                ✦ ՀԱՎԵԼՅԱԼ ՏԵՂԵԿՈՒԹՅՈՒՆ ✦
               </p>
-              {church.info}
-            </div>
+              <p style={{
+                fontSize:'0.92rem', color:'var(--text-medium)', lineHeight:1.8,
+                fontFamily:'Cormorant Garamond, serif',
+              }}>
+                {church.info}
+              </p>
+            </>
           )}
         </div>
+        </div> {/* end inner wrapper */}
       </div>
-    </div>
+    </>
   )
 }
 
@@ -183,7 +279,6 @@ function CatalogTab({ filters }) {
       setTotal(d.total)
       setPage(p)
     } catch {
-      // Use demo data if API unavailable
       setChurches(DEMO_CHURCHES)
       setTotal(DEMO_CHURCHES.length)
     }
@@ -250,7 +345,7 @@ function CatalogTab({ filters }) {
         </div>
       )}
 
-      {selected && <ChurchModal church={selected} onClose={() => setSelected(null)} />}
+      {selected && <ChurchDrawer church={selected} onClose={() => setSelected(null)} />}
     </div>
   )
 }
@@ -268,14 +363,13 @@ function TimelineTab() {
       .catch(() => { setData(DEMO_TIMELINE); setLoading(false) })
   }, [])
 
-  // Group by century
   const byCentury = {}
   data.forEach(c => {
     const cent = c.century || Math.ceil(c.year / 100)
     if (!byCentury[cent]) byCentury[cent] = []
     byCentury[cent].push(c)
   })
-  const centuries = Object.keys(byCentury).sort((a, b) => +b - +a) // desc → newest at top
+  const centuries = Object.keys(byCentury).sort((a, b) => +b - +a)
 
   const stateColor = s => STATE_COLORS[s] || '#9E9E9E'
 
@@ -291,15 +385,13 @@ function TimelineTab() {
         fontFamily:'Cinzel,serif', fontSize:'0.78rem', color:'var(--text-light)',
         letterSpacing:'0.08em', marginBottom:28, textAlign:'center'
       }}>
-        ՆԵՐՔԵՎԻՑ ՎԵՐ ↓ ԱՄԵՆԱՀԻՆԸ ↓ — ԱՄԵՆԱԺԱՄԱՆԱԿԱԿԻՑԸ ↑
+        ՆԵՐՔԵՎԻՑ ՎԵՐ ↓ ԱՄԵՆԱՀԻՆԸ ↓ — ՆՈՐԱԳՈՒՅՆԸ ↑
       </div>
 
-      {/* Central timeline line */}
       <div style={{ position:'absolute', left:'50%', top:60, bottom:0, width:2, background:'linear-gradient(to bottom, var(--gold), var(--crimson), var(--gold))', transform:'translateX(-50%)', zIndex:0 }} />
 
       {centuries.map((cent, ci) => (
         <div key={cent} style={{ position:'relative', zIndex:1, marginBottom:40 }}>
-          {/* Century label */}
           <div style={{
             position:'sticky', top:80, zIndex:10,
             display:'flex', justifyContent:'center', marginBottom:24
@@ -331,7 +423,6 @@ function TimelineTab() {
                   padding:'14px 18px', maxWidth:320, position:'relative',
                   borderLeft: `3px solid ${stateColor(church.state)}`
                 }}>
-                  {/* Year badge */}
                   <div style={{
                     position:'absolute',
                     [isLeft ? 'right' : 'left']: -52,
@@ -412,18 +503,15 @@ function StatsTab() {
 
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:32 }}>
-      {/* Summary cards */}
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))', gap:16 }}>
-        <StatCard label="ԸՆԴԱՄԵՆԸ" value={stats.total} icon="🏛️" />
-        <StatCard label="ԿԱՆԳՈՒՆ" value={stats.standing} icon="✅" color="#2E7D32" />
-        <StatCard label="ԱՎԵՐՎԱԾ" value={stats.ruined} icon="💔" color="#B71C1C" />
-        <StatCard label="ԿԻՍԱՎԵՐ" value={stats.semi_ruined} icon="⚠️" color="#F57F17" />
-        <StatCard label="ԵՐԿՐՆԵՐ" value={stats.countries} icon="🌍" color="var(--dark-gold)" />
+        <StatCard label="ԸՆԴԱՄԵՆԸ"  value={stats.total} />
+        <StatCard label="ԿԱՆԳՈՒՆ"   value={stats.standing}   color="#2E7D32" />
+        <StatCard label="ԱՎԵՐՎԱԾ"   value={stats.ruined}     color="#B71C1C" />
+        <StatCard label="ԿԻՍԱՎԵՐ"   value={stats.semi_ruined} color="#F57F17" />
+        <StatCard label="ԵՐԿՐՆԵՐ"   value={stats.countries}  color="var(--dark-gold)" />
       </div>
 
-      {/* Charts row 1 */}
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:20 }}>
-        {/* By type */}
         <div className="card" style={{ padding:20 }}>
           <h3 style={{ fontFamily:'Cinzel,serif', fontSize:'0.88rem', color:'var(--crimson)', marginBottom:16, letterSpacing:'0.08em' }}>
             ՏԵՍԱԿՆԵՐԻ ԲԱՇԽՈՒՄ
@@ -438,7 +526,6 @@ function StatsTab() {
           </ResponsiveContainer>
         </div>
 
-        {/* By state */}
         <div className="card" style={{ padding:20 }}>
           <h3 style={{ fontFamily:'Cinzel,serif', fontSize:'0.88rem', color:'var(--crimson)', marginBottom:16, letterSpacing:'0.08em' }}>
             ՖԻԶԻԿԱԿԱՆ ՎԻՃԱԿ
@@ -455,7 +542,6 @@ function StatsTab() {
         </div>
       </div>
 
-      {/* By century */}
       <div className="card" style={{ padding:20 }}>
         <h3 style={{ fontFamily:'Cinzel,serif', fontSize:'0.88rem', color:'var(--crimson)', marginBottom:16, letterSpacing:'0.08em' }}>
           ԿԱՌՈՒՑՈՒՄՆ ԸՍՏ ԴԱՐԵՐԻ
@@ -473,7 +559,6 @@ function StatsTab() {
         </ResponsiveContainer>
       </div>
 
-      {/* Top countries + Top names */}
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:20 }}>
         <div className="card" style={{ padding:20 }}>
           <h3 style={{ fontFamily:'Cinzel,serif', fontSize:'0.88rem', color:'var(--crimson)', marginBottom:16, letterSpacing:'0.08em' }}>
@@ -500,7 +585,7 @@ function StatsTab() {
               <XAxis type="number" tick={{ fontFamily:'Cinzel,serif', fontSize:10, fill:'var(--text-medium)' }} />
               <YAxis type="category" dataKey="name" tick={{ fontFamily:'Cinzel,serif', fontSize:10, fill:'var(--text-medium)' }} width={120} />
               <Tooltip content={<CustomTooltip />} />
-              <Bar dataKey="value" fill="var(--dark-gold)" radius={[0,4,4,0]} name="Հանդիպ." />
+              <Bar dataKey="value" fill="var(--dark-gold)" radius={[0,4,4,0]} name="Հանդիպումների քանակ" />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -512,7 +597,7 @@ function StatsTab() {
 /* ─── Chatbot Tab ────────────────────────────────────────────────── */
 function ChatbotTab() {
   const [messages, setMessages] = useState([
-    { role:'assistant', content:'Բարեւ Ձեզ։ Ես «Հայկական Ժառանգություն» նախաձեռնության թվային օգնականն եմ։ Կարող եք հարցնել ցանկացած կառույցի, դարաշրջանի կամ ճարտ. ոճի մասին։ 🏛️' }
+    { role:'assistant', content:'Բարեւ Ձեզ։ Ես «Հայկական Ժառանգություն» նախաձեռնության թվային օգնականն եմ։ Կարող եք հարցնել ցանկացած կառույցի, դարաշրջանի կամ ճարտարապետական ոճի մասին։ 🏛️' }
   ])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -545,15 +630,14 @@ function ChatbotTab() {
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior:'smooth' }) }, [messages])
 
   const suggestions = [
-    'Ո՞ւմ է կառուցել Վիեննայի Մխ. վ-ն',
-    'Ո՞ր կառույցն է ԱՄՆ-ի ամ. հինը',
-    'Ադրբ-ի ա. ե-ն ի՞նչ վ-ում են',
-    'Ո՞ր դարի կ-ն ամ. շատ են',
+    'Ո՞ւմ է կառուցել Վիեննայի Մխիթարյան վանքը',
+    'Ո՞ր կառույցն է ԱՄՆ-ի ամենահին հայկական եկեղեցին',
+    'Ադրբեջանի հայկական եկեղեցիները ի՞նչ վիճակում են',
+    'Ո՞ր դարի կառույցները ամենաշատն են',
   ]
 
   return (
     <div style={{ display:'flex', flexDirection:'column', height:'calc(100vh - 260px)', minHeight:500 }}>
-      {/* Messages */}
       <div style={{ flex:1, overflowY:'auto', padding:'8px 0', display:'flex', flexDirection:'column', gap:12 }}>
         {messages.map((m, i) => (
           <div key={i} className="fade-in" style={{ display:'flex', justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start' }}>
@@ -593,7 +677,6 @@ function ChatbotTab() {
         <div ref={bottomRef} />
       </div>
 
-      {/* Suggestions */}
       {messages.length < 3 && (
         <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginBottom:12 }}>
           {suggestions.map(s => (
@@ -604,17 +687,16 @@ function ChatbotTab() {
         </div>
       )}
 
-      {/* Input */}
       <div style={{ display:'flex', gap:10, background:'var(--warm-white)', borderRadius:8, padding:12, border:'1px solid var(--parchment)' }}>
         <input
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && !e.shiftKey && send()}
-          placeholder="Հարցրեք հայկական կրոնական ճարտ-ի մասին…"
+          placeholder="Հարցրեք հայկական կրոնական ճարտարապետության մասին…"
           style={{ flex:1, border:'none', background:'transparent', fontSize:'1rem' }}
         />
         <button className="btn btn-primary" onClick={send} disabled={loading || !input.trim()} style={{ minWidth:80 }}>
-          Ուղ. →
+          Ուղարկել →
         </button>
       </div>
     </div>
@@ -623,23 +705,45 @@ function ChatbotTab() {
 
 /* ─── Submit Tab ─────────────────────────────────────────────────── */
 function SubmitTab({ filters }) {
-  const [form, setForm] = useState({ name:'', type:'Եկեղեցի', country:'', city:'', building_year:'', state:'Կանգուն', location:'', info:'', submitter_name:'', submitter_email:'' })
-  const [status, setStatus] = useState(null) // null | 'sending' | 'success' | 'error'
+  const [form, setForm] = useState({
+    name:'', type:'Եկեղեցի', country:'', city:'',
+    building_year:'', state:'Կանգուն', location:'',
+    info:'', submitter_name:'', submitter_email:''
+  })
+  const [picture, setPicture] = useState(null)       // File object
+  const [preview, setPreview] = useState(null)       // Object URL for preview
+  const [status, setStatus] = useState(null)
+  const fileRef = useRef(null)
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
+
+  const handleFile = e => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setPicture(file)
+    setPreview(URL.createObjectURL(file))
+  }
+
+  const removeImage = () => {
+    setPicture(null)
+    if (preview) URL.revokeObjectURL(preview)
+    setPreview(null)
+    if (fileRef.current) fileRef.current.value = ''
+  }
 
   const submit = async e => {
     e.preventDefault()
-    if (!form.name || !form.country) return alert('Անհրաժեշտ դաշտերը պարտադիր են')
+    if (!form.name || !form.country) return alert('Անունը և երկիրը պարտադիր դաշտեր են')
     setStatus('sending')
     try {
-      const r = await fetch(`${API}/api/submit`, {
-        method:'POST',
-        headers:{ 'Content-Type':'application/json' },
-        body: JSON.stringify(form)
-      })
-      const d = await r.json()
+      const fd = new FormData()
+      Object.entries(form).forEach(([k, v]) => fd.append(k, v || ''))
+      if (picture) fd.append('picture', picture)
+
+      const r = await fetch(`${API}/api/submit`, { method:'POST', body: fd })
+      if (!r.ok) throw new Error()
       setStatus('success')
       setForm({ name:'', type:'Եկեղեցի', country:'', city:'', building_year:'', state:'Կանգուն', location:'', info:'', submitter_name:'', submitter_email:'' })
+      removeImage()
     } catch { setStatus('error') }
   }
 
@@ -665,7 +769,7 @@ function SubmitTab({ filters }) {
           ԱՎԵԼԱՑՆԵԼ ՆՈՐ ԿԱՌՈՒՅՑ
         </h2>
         <p style={{ color:'var(--text-medium)', fontSize:'0.92rem', marginTop:8 }}>
-          Եթե գիտեք կառույց, որ բացակայում է, ուղ. ձ. հայտն ու մ. թ-ն կդ.
+          Եթե գիտեք կառույց, որ բացակայում է, ուղարկեք Ձեր հայտը՝ հետևյալ ձևաչափով․
         </p>
       </div>
 
@@ -675,60 +779,118 @@ function SubmitTab({ filters }) {
           padding:28, textAlign:'center', animation:'slideUp 0.4s ease'
         }}>
           <div style={{ fontSize:'3rem' }}>✅</div>
-          <h3 style={{ fontFamily:'Cinzel,serif', color:'#2E7D32', margin:'12px 0 8px' }}>Շնորհ. Ձ. հ. ստ.!</h3>
-          <p style={{ color:'#388E3C' }}>Մ. թ-ն կդ. մ. 48 ժ-ի ընթ-ք.</p>
-          <button className="btn btn-outline" onClick={() => setStatus(null)} style={{ marginTop:16 }}>Ավ. մ. հ.</button>
+          <h3 style={{ fontFamily:'Cinzel,serif', color:'#2E7D32', margin:'12px 0 8px' }}>Շնորհակալություն։ Ձեր հայտն ընդունվել է։</h3>
+          <p style={{ color:'#388E3C' }}>Այն կվերանայվի մեր թիմի կողմից առավելագույնը 48 ժամվա ընթացքում։</p>
+          <button className="btn btn-outline" onClick={() => setStatus(null)} style={{ marginTop:16 }}>Ավելացնել մեկ այլ հայտ</button>
         </div>
       ) : (
         <form onSubmit={submit}>
           <div style={{ display:'flex', flexDirection:'column', gap:20 }}>
+
+            {/* Basic info */}
             <div style={{ background:'var(--warm-white)', border:'1px solid var(--parchment)', borderRadius:8, padding:24 }}>
               <OrnamentDivider label="ՀԻՄՆԱԿԱՆ ՏԵՂԵԿՈՒԹՅՈՒՆ" />
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16, marginTop:16 }}>
                 {field('Անվանում', 'name', 'text', true)}
                 <div>
                   <label style={{ fontFamily:'Cinzel,serif', fontSize:'0.72rem', color:'var(--text-light)', letterSpacing:'0.08em', display:'block', marginBottom:6 }}>
-                    ՏԵՍԱԿ <span style={{ color:'var(--crimson)' }}>*</span>
+                    Տեսակ <span style={{ color:'var(--crimson)' }}>*</span>
                   </label>
                   <select value={form.type} onChange={e => set('type', e.target.value)}>
-                    {['Եկեղեցի','Վանք','Մատուռ','Տաճար','Վանական համ.'].map(t => <option key={t} value={t}>{t}</option>)}
+                    {['Եկեղեցի','Վանք','Մատուռ','Տաճար','Վանական համալիր'].map(t => <option key={t} value={t}>{t}</option>)}
                   </select>
                 </div>
                 {field('Երկիր', 'country', 'text', true)}
                 {field('Քաղաք / Գյուղ', 'city')}
-                {field('Կառ. թ. / Դ.', 'building_year', 'text', false, 'Օր.՝ 1648, 17-ին դ.')}
+                {field('Կառուցման դար/տարեթիվ', 'building_year')}
                 <div>
-                  <label style={{ fontFamily:'Cinzel,serif', fontSize:'0.72rem', color:'var(--text-light)', letterSpacing:'0.08em', display:'block', marginBottom:6 }}>ՎԻՃԱԿ</label>
+                  <label style={{ fontFamily:'Cinzel,serif', fontSize:'0.72rem', color:'var(--text-light)', letterSpacing:'0.08em', display:'block', marginBottom:6 }}>Կարգավիճակ</label>
                   <select value={form.state} onChange={e => set('state', e.target.value)}>
-                    {['Կանգուն','Կիսավեր','Ավերված','Չկան տ.'].map(s => <option key={s} value={s}>{s}</option>)}
+                    {['Կանգուն','Կիսավեր','Ավերված','Չկան տեղեկություններ'].map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </div>
               </div>
-              {field('Կոոր. (GPS)', 'location', 'text', false, 'Օր.՝ 40.1234°N 44.5678°E')}
+              {field('Տեղագրություն', 'location', 'text', false, 'Օր.՝ 40.1234°N 44.5678°E')}
             </div>
 
+            {/* Image upload */}
             <div style={{ background:'var(--warm-white)', border:'1px solid var(--parchment)', borderRadius:8, padding:24 }}>
-              <OrnamentDivider label="ԼՐԱՑ. ՏԵՂ." />
+              <OrnamentDivider label="ՆԿԱՐ" />
               <div style={{ marginTop:16 }}>
-                {field('Ծ. Տ.', 'info', 'textarea', false, 'Ա., հ. ե. կ. մ. ժ.')}
+                {preview ? (
+                  <div style={{ position:'relative', borderRadius:8, overflow:'hidden', height:200 }}>
+                    <img src={preview} alt="preview" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+                    <div style={{
+                      position:'absolute', inset:0,
+                      background:'linear-gradient(transparent 55%, rgba(26,10,5,0.65))',
+                    }}/>
+                    <div style={{ position:'absolute', bottom:12, left:14, right:14, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                      <span style={{ color:'#EDD9A3', fontFamily:'Cinzel,serif', fontSize:'0.72rem', letterSpacing:'0.06em' }}>
+                        {picture?.name}
+                      </span>
+                      <button type="button" onClick={removeImage} style={{
+                        background:'rgba(139,26,43,0.85)', border:'none', borderRadius:6,
+                        color:'#fff', fontSize:'0.78rem', padding:'4px 12px',
+                        cursor:'pointer', fontFamily:'Cinzel,serif', letterSpacing:'0.06em',
+                      }}>
+                        ✕ Հեռ.
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div
+                    onClick={() => fileRef.current?.click()}
+                    style={{
+                      border:'2px dashed var(--stone)', borderRadius:8,
+                      padding:'32px 20px', textAlign:'center', cursor:'pointer',
+                      transition:'border-color 0.2s, background 0.2s',
+                    }}
+                    onMouseOver={e => { e.currentTarget.style.borderColor='var(--gold)'; e.currentTarget.style.background='rgba(201,165,116,0.06)' }}
+                    onMouseOut={e => { e.currentTarget.style.borderColor='var(--stone)'; e.currentTarget.style.background='transparent' }}
+                  >
+                    <div style={{ fontSize:'2.2rem', marginBottom:8, opacity:0.5 }}>📷</div>
+                    <p style={{ fontFamily:'Cinzel,serif', fontSize:'0.78rem', color:'var(--text-medium)', letterSpacing:'0.06em' }}>
+                      Սեղմեք նկար ընտրելու համար
+                    </p>
+                    <p style={{ fontSize:'0.72rem', color:'var(--text-light)', marginTop:4 }}>
+                      JPG, PNG, WEBP · Մաքս. 5 MB
+                    </p>
+                  </div>
+                )}
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  onChange={handleFile}
+                  style={{ display:'none' }}
+                />
               </div>
             </div>
 
+            {/* Extra info */}
             <div style={{ background:'var(--warm-white)', border:'1px solid var(--parchment)', borderRadius:8, padding:24 }}>
-              <OrnamentDivider label="ԴՐ. ՄԱUԻՆ" />
+              <OrnamentDivider label="Հավելյալ տեղեկություն" />
+              <div style={{ marginTop:16 }}>
+                {field('Պատմեզ մեզ, թե ինչ է Ձեզ հայտնի այս կառույցի մասին', 'info', 'textarea', false)}
+              </div>
+            </div>
+
+            {/* Submitter */}
+            <div style={{ background:'var(--warm-white)', border:'1px solid var(--parchment)', borderRadius:8, padding:24 }}>
+              <OrnamentDivider label="Ձեր մասին" />
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16, marginTop:16 }}>
-                {field('Ձ. Ա-Ա.', 'submitter_name')}
-                {field('Էլ-փ.', 'submitter_email', 'email')}
+                {field('Անուն, ազգանուն', 'submitter_name')}
+                {field('Էլեկտրոնային հասցե', 'submitter_email', 'email')}
               </div>
             </div>
 
             <button type="submit" className="btn btn-primary" style={{ padding:'14px 32px', fontSize:'0.85rem', letterSpacing:'0.12em' }} disabled={status === 'sending'}>
-              {status === 'sending' ? '✦ Ուղ. կ-ի...' : 'ՈՒՂԱՐԿ. ՀԱՅՏ →'}
+              {status === 'sending' ? '✦ Ուղարկվում է...' : 'ՈՒՂԱՐԿԵԼ ՀԱՅՏ →'}
             </button>
 
             {status === 'error' && (
               <p style={{ color:'var(--crimson)', fontSize:'0.88rem', textAlign:'center' }}>
-                Սխ. Խ. կ.
+                Հայտնաբերվել է սխալ։ Փորձեք կրկին․
               </p>
             )}
           </div>
@@ -738,25 +900,307 @@ function SubmitTab({ filters }) {
   )
 }
 
-/* ─── Demo data (fallback when API offline) ──────────────────────── */
+/* ─── Map Tab ────────────────────────────────────────────────────── */
+
+function parseCoords(locationStr) {
+  if (!locationStr) return null
+  const m = locationStr.match(/(-?\d+\.?\d*)[°\s,]+[NS]?\s*(-?\d+\.?\d*)[°\s]*[EW]?/i)
+  if (m) {
+    const lat = parseFloat(m[1])
+    const lng = parseFloat(m[2])
+    if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) return [lat, lng]
+  }
+  return null
+}
+
+const STATE_MARKER_COLORS = {
+  'Կանգուն':              '#2E7D32',
+  'Ավերված':              '#B71C1C',
+  'Կիսավեր':              '#F57F17',
+  'Չկան տեղեկություններ': '#757575',
+}
+
+function MapTab() {
+  const [churches, setChurches] = useState([])
+  const [loading, setLoading]   = useState(true)
+  const [filter, setFilter]     = useState('')
+  const [selected, setSelected] = useState(null)
+  const mapRef    = useRef(null)   // Leaflet map instance
+  const mapElRef  = useRef(null)   // DOM div
+  const markersRef = useRef([])
+
+  // Load Leaflet CSS dynamically
+  useEffect(() => {
+    if (!document.getElementById('leaflet-css')) {
+      const link = document.createElement('link')
+      link.id   = 'leaflet-css'
+      link.rel  = 'stylesheet'
+      link.href = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css'
+      document.head.appendChild(link)
+    }
+  }, [])
+
+  // Fetch churches
+  useEffect(() => {
+    fetch(`${API}/api/churches?per_page=9999`)
+      .then(r => r.json())
+      .then(d => { setChurches(d.data || []); setLoading(false) })
+      .catch(() => { setChurches(DEMO_CHURCHES); setLoading(false) })
+  }, [])
+
+  // Init Leaflet map once
+  useEffect(() => {
+    if (loading || !mapElRef.current || mapRef.current) return
+
+    const script = document.createElement('script')
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js'
+    script.onload = () => {
+      const L = window.L
+      const map = L.map(mapElRef.current, { zoomControl: true }).setView([40, 20], 3)
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors'
+      }).addTo(map)
+      mapRef.current = map
+      renderMarkers(filter)
+    }
+    if (window.L) {
+      // already loaded
+      const L = window.L
+      const map = L.map(mapElRef.current, { zoomControl: true }).setView([40, 20], 3)
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors'
+      }).addTo(map)
+      mapRef.current = map
+      renderMarkers(filter)
+    } else {
+      document.head.appendChild(script)
+    }
+  }, [loading])
+
+  const renderMarkers = (activeFilter) => {
+    const L = window.L
+    if (!L || !mapRef.current) return
+
+    // Clear existing markers
+    markersRef.current.forEach(m => m.remove())
+    markersRef.current = []
+
+    const points = churches
+      .map(c => ({ ...c, coords: parseCoords(c.location) }))
+      .filter(c => c.coords)
+      .filter(c => !activeFilter || c.state === activeFilter)
+
+    if (points.length === 0) return
+
+    const bounds = []
+    points.forEach(c => {
+      const color = STATE_MARKER_COLORS[c.state] || '#8B1A2B'
+      const icon = L.divIcon({
+        className: '',
+        html: `<svg width="26" height="36" viewBox="0 0 26 36" xmlns="http://www.w3.org/2000/svg">
+          <path d="M13 0C5.82 0 0 5.82 0 13c0 9 13 23 13 23S26 22 26 13C26 5.82 20.18 0 13 0z"
+            fill="${color}" stroke="rgba(255,255,255,0.9)" stroke-width="1.5"/>
+          <circle cx="13" cy="13" r="5" fill="rgba(255,255,255,0.9)"/>
+        </svg>`,
+        iconSize: [26, 36],
+        iconAnchor: [13, 36],
+        popupAnchor: [0, -38],
+      })
+
+      const marker = L.marker(c.coords, { icon }).addTo(mapRef.current)
+      marker.bindPopup(`
+        <div style="font-family:'Cinzel',serif; min-width:170px; padding:2px 0">
+          <strong style="color:#8B1A2B; font-size:0.82rem; display:block; margin-bottom:4px">${c.name}</strong>
+          <span style="font-size:0.7rem; color:#555">${[c.type, c.city, c.country].filter(Boolean).join(' · ')}</span>
+          ${c.building_year ? `<span style="display:block; font-size:0.68rem; color:#888; margin-top:2px">${c.building_year}</span>` : ''}
+          <span style="display:inline-block; margin-top:6px; padding:1px 8px; border-radius:10px; font-size:0.65rem; background:${color}; color:#fff">${c.state || '—'}</span>
+          <div style="margin-top:8px">
+            <button onclick="window.__openDrawer('${c.id}')" style="font-family:'Cinzel',serif; font-size:0.68rem; background:#8B1A2B; color:#fff; border:none; padding:4px 12px; border-radius:4px; cursor:pointer; letter-spacing:0.06em">
+              Մանրամասն →
+            </button>
+          </div>
+        </div>
+      `)
+      markersRef.current.push(marker)
+      bounds.push(c.coords)
+    })
+
+    if (bounds.length > 0) {
+      mapRef.current.fitBounds(bounds, { padding: [40, 40], maxZoom: 13 })
+    }
+  }
+
+  // Re-render markers when filter changes
+  useEffect(() => {
+    if (mapRef.current) renderMarkers(filter)
+  }, [filter, churches])
+
+  // Global handler for popup button
+  useEffect(() => {
+    window.__openDrawer = (id) => {
+      const church = churches.find(c => c.id === id)
+      if (church) setSelected(church)
+    }
+    return () => { delete window.__openDrawer }
+  }, [churches])
+
+  const stateFilters = [
+    { value: '',                      label: 'Բոլորը',   color: '#8B1A2B' },
+    { value: 'Կանգուն',               label: 'Կանգուն',  color: '#2E7D32' },
+    { value: 'Կիսավեր',               label: 'Կիսավեր',  color: '#F57F17' },
+    { value: 'Ավերված',               label: 'Ավերված',  color: '#B71C1C' },
+    { value: 'Չկան տեղեկություններ',  label: 'Անհայտ',   color: '#757575' },
+  ]
+
+  const visibleCount = churches
+    .filter(c => parseCoords(c.location))
+    .filter(c => !filter || c.state === filter).length
+
+  return (
+    <div style={{ display:'flex', flexDirection:'column', gap:0 }}>
+
+      {/* Top bar */}
+      <div style={{
+        background:'var(--warm-white)', border:'1px solid var(--parchment)',
+        borderRadius:8, padding:'12px 18px', marginBottom:12,
+        display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:12,
+      }}>
+        <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+          {stateFilters.map(f => (
+            <button key={f.value} onClick={() => setFilter(f.value)} style={{
+              padding:'5px 14px', borderRadius:20, cursor:'pointer',
+              fontFamily:'Cinzel,serif', fontSize:'0.72rem', letterSpacing:'0.06em',
+              border:`2px solid ${f.color}`,
+              background: filter === f.value ? f.color : 'transparent',
+              color: filter === f.value ? '#fff' : f.color,
+              transition:'all 0.18s',
+            }}>
+              {f.label}
+            </button>
+          ))}
+        </div>
+        <span style={{ fontFamily:'Cinzel,serif', fontSize:'0.75rem', color:'var(--text-light)', letterSpacing:'0.06em' }}>
+          {loading ? '…' : `${visibleCount} կառույց քարտեզի վրա`}
+        </span>
+      </div>
+
+      {/* Legend */}
+      <div style={{ display:'flex', gap:16, flexWrap:'wrap', marginBottom:12, paddingLeft:4 }}>
+        {stateFilters.slice(1).map(f => (
+          <div key={f.value} style={{ display:'flex', alignItems:'center', gap:6 }}>
+            <div style={{ width:11, height:11, borderRadius:'50%', background:f.color }}/>
+            <span style={{ fontFamily:'Cinzel,serif', fontSize:'0.68rem', color:'var(--text-medium)', letterSpacing:'0.04em' }}>
+              {f.label}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {loading ? (
+        <div style={{ height:560, display:'flex', alignItems:'center', justifyContent:'center', color:'var(--gold)', fontSize:'2rem' }}>
+          <div style={{ animation:'ornament-spin 2s linear infinite' }}>✦</div>
+        </div>
+      ) : (
+        <div
+          ref={mapElRef}
+          style={{
+            height:'calc(100vh - 320px)', minHeight:500,
+            borderRadius:10, overflow:'hidden',
+            border:'2px solid var(--parchment)',
+            boxShadow:'0 4px 24px rgba(26,10,5,0.12)',
+            zIndex:0,
+          }}
+        />
+      )}
+
+      {selected && <ChurchDrawer church={selected} onClose={() => setSelected(null)} />}
+    </div>
+  )
+}
+
+
 const DEMO_CHURCHES = [
-  { id:'1', type:'Եկեղեցի', name:'Սուրբ Աստվածածին', building_year:'1797', country:'Ադրբեջան', city:'Բաքու', state:'Կիսավեր', picture:'https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Views_of_Ichery_Sheher_1987.jpg/960px-Views_of_Ichery_Sheher_1987.jpg', info:'Վ. Ա. Ա.' },
-  { id:'7', type:'Եկեղեցի', name:'Սուրբ Հովհաննես', building_year:'1633', country:'Ադրբ.', city:'Գ.', state:'Կ.', picture:'https://upload.wikimedia.org/wikipedia/commons/thumb/3/3d/Saint_Iohann_church_in_Ganja_1.jpg/960px-Saint_Iohann_church_in_Ganja_1.jpg', info:'' },
-  { id:'175', type:'Եկ.', name:'Սուրբ Փրկիչ', building_year:'1891', country:'ԱՄ.', city:'Ո.', state:'Կ.', picture:'https://upload.wikimedia.org/wikipedia/commons/4/43/Worcester_Armenian_church.png', info:'' },
+  {
+    id: '1',
+    type: 'Եկեղեցի',
+    name: 'Սուրբ Աստվածածին',
+    building_year: '1797',
+    country: 'Ադրբեջան',
+    city: 'Բաքու',
+    state: 'Կիսավեր',
+    picture: 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Views_of_Ichery_Sheher_1987.jpg/960px-Views_of_Ichery_Sheher_1987.jpg',
+    info: 'Կառույցը գտնվում է Իչերի Շեհեր պատմական թաղամասում։'
+  },
+  {
+    id: '7',
+    type: 'Եկեղեցի',
+    name: 'Սուրբ Հովհաննես',
+    building_year: '1633',
+    country: 'Ադրբեջան',
+    city: 'Գյանջա',
+    state: 'Կանգուն',
+    picture: 'https://upload.wikimedia.org/wikipedia/commons/thumb/3/3d/Saint_Iohann_church_in_Ganja_1.jpg/960px-Saint_Iohann_church_in_Ganja_1.jpg',
+    info: ''
+  },
+  {
+    id: '175',
+    type: 'Եկեղեցի',
+    name: 'Սուրբ Փրկիչ',
+    building_year: '1891',
+    country: 'ԱՄՆ',
+    city: 'Վուսթեր',
+    state: 'Կանգուն',
+    picture: 'https://upload.wikimedia.org/wikipedia/commons/4/43/Worcester_Armenian_church.png',
+    info: 'ԱՄՆ-ի ամենահին հայկական եկեղեցիներից մեկը։'
+  },
 ]
+
 const DEMO_TIMELINE = [
-  { id:'a27', name:'Ս.Բ. Ջ.', year:1308, century:14, type:'Ե.', country:'Ի.', city:'Ջ.', state:'Կ.', picture:null },
-  { id:'a29', name:'Ս.Խ. Վ.', year:1688, century:17, type:'Ե.', country:'Ի.', city:'Վ.', state:'Կ.', picture:null },
-  { id:'a2', name:'Վ.Մ.Վ.', year:1810, century:19, type:'Վ.', country:'Ա.', city:'Վ.', state:'Կ.', picture:null },
-  { id:'175', name:'Ս.Փ.', year:1891, century:19, type:'Ե.', country:'ԱՄ.', city:'Ո.', state:'Կ.', picture:null },
+  { id: 'a27', name: 'Սուրբ Բարդուղիմեոս',       year: 1308, century: 14, type: 'Եկեղեցի', country: 'Իրան',    city: 'Ջուղա',   state: 'Կանգուն', picture: null },
+  { id: 'a29', name: 'Սուրբ Խաչ վանք',            year: 1688, century: 17, type: 'Եկեղեցի', country: 'Իրան',    city: 'Վան',     state: 'Կանգուն', picture: null },
+  { id: 'a2',  name: 'Վիեննայի Մխիթարյան վանք',   year: 1810, century: 19, type: 'Վանք',    country: 'Ավստրիա', city: 'Վիեննա',  state: 'Կանգուն', picture: null },
+  { id: '175', name: 'Սուրբ Փրկիչ',               year: 1891, century: 19, type: 'Եկեղեցի', country: 'ԱՄՆ',     city: 'Վուսթեր', state: 'Կանգուն', picture: null },
 ]
+
 const DEMO_STATS = {
-  total:63, standing:55, ruined:4, semi_ruined:3, countries:18,
-  by_type:[{name:'Եկ.',value:54},{name:'Տ.',value:5},{name:'Մ.',value:2},{name:'Վ.',value:2}],
-  by_state:[{name:'Կ.',value:55},{name:'Ա.',value:4},{name:'Կ.',value:3},{name:'Չ.Տ.',value:1}],
-  by_country:[{name:'ԱՄՆ',value:20},{name:'Ա.',value:13},{name:'Բ.',value:9},{name:'Կ.',value:7}],
-  by_century:[{name:'13-ին',value:1,century:13},{name:'14-ին',value:1,century:14},{name:'17-ին',value:3,century:17},{name:'19-ին',value:12,century:19},{name:'20-ին',value:31,century:20},{name:'21-ին',value:3,century:21}],
-  top_names:[{name:'Ս.Գ.Լ.',value:12},{name:'Ս.Ա.',value:9},{name:'Ս.Հ.',value:8},{name:'Ս.Կ.',value:6},{name:'Ս.Ս.',value:5}],
+  total: 63,
+  standing: 55,
+  ruined: 4,
+  semi_ruined: 3,
+  countries: 18,
+  by_type: [
+    { name: 'Եկեղեցի', value: 54 },
+    { name: 'Տաճար',   value: 5  },
+    { name: 'Մատուռ',  value: 2  },
+    { name: 'Վանք',    value: 2  },
+  ],
+  by_state: [
+    { name: 'Կանգուն',              value: 55 },
+    { name: 'Ավերված',              value: 4  },
+    { name: 'Կիսավեր',              value: 3  },
+    { name: 'Չկան տեղեկություններ', value: 1  },
+  ],
+  by_country: [
+    { name: 'ԱՄՆ',      value: 20 },
+    { name: 'Ֆրանսիա',  value: 13 },
+    { name: 'Բրազիլիա', value: 9  },
+    { name: 'Կանադա',   value: 7  },
+  ],
+  by_century: [
+    { name: '13-ին դար', value: 1,  century: 13 },
+    { name: '14-ին դար', value: 1,  century: 14 },
+    { name: '17-ին դար', value: 3,  century: 17 },
+    { name: '19-ին դար', value: 12, century: 19 },
+    { name: '20-ին դար', value: 31, century: 20 },
+    { name: '21-ին դար', value: 3,  century: 21 },
+  ],
+  top_names: [
+    { name: 'Սուրբ Գրիգոր Լուսավորիչ', value: 12 },
+    { name: 'Սուրբ Աստվածածին',         value: 9  },
+    { name: 'Սուրբ Հովհաննես',           value: 8  },
+    { name: 'Սուրբ Կարապետ',             value: 6  },
+    { name: 'Սուրբ Սարգիս',              value: 5  },
+  ],
   timeline: DEMO_TIMELINE,
 }
 
@@ -769,9 +1213,7 @@ function Header() {
       position:'relative',
       overflow:'hidden',
     }}>
-      {/* Background ornaments */}
       <div style={{ position:'absolute', inset:0, opacity:0.06, backgroundImage:`url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23C9A574' fill-opacity='1'%3E%3Cpath d='M27 3h6v14h14v6H33v14h-6V23H13v-6h14z'/%3E%3C/g%3E%3C/svg%3E")`, backgroundSize:'60px 60px' }} />
-
       <div style={{ maxWidth:1200, margin:'0 auto', padding:'32px 32px 28px', position:'relative', zIndex:1, display:'flex', alignItems:'center', gap:24 }}>
         <div style={{ animation:'float 4s ease-in-out infinite' }}>
           <ArmenianCross size={56} color="var(--pale-gold)" />
@@ -783,13 +1225,6 @@ function Header() {
           <p style={{ fontFamily:'Cormorant Garamond,serif', fontSize:'1rem', color:'rgba(237,217,163,0.8)', letterSpacing:'0.2em', marginTop:4, fontStyle:'italic' }}>
             Կրոնական Ճարտարապետության Կատալոգ
           </p>
-          <div style={{ display:'flex', gap:16, marginTop:10, flexWrap:'wrap' }}>
-            {[['🏛️','Եկ. Վ. Մ. Տ.'],['🌍','20+ Երկ.'],['📅','VIII – XXI դդ.'],['🔬','Ընթ. Է']].map(([e,l]) => (
-              <span key={l} style={{ fontSize:'0.72rem', fontFamily:'Cinzel,serif', letterSpacing:'0.06em', color:'rgba(237,217,163,0.7)', display:'flex', alignItems:'center', gap:4 }}>
-                {e} {l}
-              </span>
-            ))}
-          </div>
         </div>
       </div>
     </header>
@@ -812,7 +1247,6 @@ export default function App() {
     <div style={{ minHeight:'100vh', display:'flex', flexDirection:'column' }}>
       <Header />
 
-      {/* Navigation */}
       <nav style={{
         background:'var(--warm-white)',
         borderBottom:'2px solid var(--parchment)',
@@ -839,10 +1273,10 @@ export default function App() {
         </div>
       </nav>
 
-      {/* Main content */}
       <main style={{ flex:1, maxWidth:1200, margin:'0 auto', width:'100%', padding:'32px 32px 60px' }}>
         <div key={tab} className="fade-in">
           {tab === 'catalog'  && <CatalogTab   filters={filters} />}
+          {tab === 'map'      && <MapTab />}
           {tab === 'timeline' && <TimelineTab />}
           {tab === 'stats'    && <StatsTab />}
           {tab === 'chat'     && <ChatbotTab />}
@@ -850,14 +1284,13 @@ export default function App() {
         </div>
       </main>
 
-      {/* Footer */}
       <footer style={{
         background:'var(--warm-dark)', color:'rgba(237,217,163,0.6)',
         textAlign:'center', padding:'24px 32px',
         fontFamily:'Cinzel,serif', fontSize:'0.72rem', letterSpacing:'0.1em'
       }}>
         <ArmenianCross size={24} color="var(--gold)" />
-        <p style={{ marginTop:8 }}>ՀԱՅԿԱԿԱՆ ԺԱՌԱՆԳՈՒԹՅՈՒՆ © {new Date().getFullYear()} · Ընթ. Է · Բ. Ա. Է Ա.</p>
+        <p style={{ marginTop:8 }}>ՀԱՅԿԱԿԱՆ ԺԱՌԱՆԳՈՒԹՅՈՒՆ © {new Date().getFullYear()} · Բոլոր իրավունքները պաշտպանված են</p>
       </footer>
     </div>
   )

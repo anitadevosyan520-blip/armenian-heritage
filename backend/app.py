@@ -2,15 +2,23 @@
 Armenian Heritage Churches - FastAPI Backend
 Provides data API, Anthropic chat proxy, and submission handling
 """
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Form, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import json
 import httpx
 import os
 import re
+import shutil
+import uuid
 from typing import Optional, List
 from collections import Counter
+from datetime import datetime, timezone
+
+UPLOADS_DIR = "uploads"
+SUBMISSIONS_FILE = "submissions.json"
+os.makedirs(UPLOADS_DIR, exist_ok=True)
 
 app = FastAPI(
     title="Armenian Heritage Churches API",
@@ -24,6 +32,22 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
+
+# ─── Submissions persistence ──────────────────────────────────────────────────
+
+def load_submissions() -> List[dict]:
+    if os.path.exists(SUBMISSIONS_FILE):
+        with open(SUBMISSIONS_FILE, encoding="utf-8") as f:
+            return json.load(f)
+    return []
+
+def save_submissions(submissions: List[dict]):
+    with open(SUBMISSIONS_FILE, "w", encoding="utf-8") as f:
+        json.dump(submissions, f, ensure_ascii=False, indent=2)
+
+SUBMISSIONS: List[dict] = load_submissions()
 
 # ─── Data Loading ────────────────────────────────────────────────────────────
 
@@ -95,22 +119,11 @@ for idx, c in enumerate(raw_churches):
     }
     CHURCHES.append(church)
 
-# In-memory submissions store (use DB in production)
-SUBMISSIONS: List[dict] = []
-
 # ─── Models ──────────────────────────────────────────────────────────────────
 
-class SubmissionRequest(BaseModel):
-    name: str
-    type: str
-    country: str
-    city: str
-    building_year: Optional[str] = None
-    state: Optional[str] = None
-    location: Optional[str] = None
-    info: Optional[str] = None
-    submitter_name: Optional[str] = None
-    submitter_email: Optional[str] = None
+class StatusUpdate(BaseModel):
+    status: str  # 'approved' | 'rejected'
+    note: Optional[str] = None
 
 class ChatMessage(BaseModel):
     message: str
@@ -250,19 +263,106 @@ def get_stats():
     }
 
 @app.post("/api/submit")
-def submit_church(submission: SubmissionRequest):
-    data = submission.model_dump()
-    data["id"] = f"sub_{len(SUBMISSIONS) + 1}"
-    data["pending"] = True
+async def submit_church(
+    name:            str           = Form(...),
+    type:            str           = Form(...),
+    country:         str           = Form(...),
+    city:            Optional[str] = Form(None),
+    building_year:   Optional[str] = Form(None),
+    state:           Optional[str] = Form(None),
+    location:        Optional[str] = Form(None),
+    info:            Optional[str] = Form(None),
+    submitter_name:  Optional[str] = Form(None),
+    submitter_email: Optional[str] = Form(None),
+    picture:         Optional[UploadFile] = File(None),
+):
+    picture_url = None
+    if picture and picture.filename:
+        ext = os.path.splitext(picture.filename)[1].lower()
+        allowed = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
+        if ext not in allowed:
+            raise HTTPException(status_code=400, detail="Թույlattrված ձևաչափ չէ։ Օգտ. jpg, png կամ webp")
+        filename = f"{uuid.uuid4().hex}{ext}"
+        dest = os.path.join(UPLOADS_DIR, filename)
+        with open(dest, "wb") as f:
+            shutil.copyfileobj(picture.file, f)
+        picture_url = f"/uploads/{filename}"
+
+    data = {
+        "id": f"sub_{len(SUBMISSIONS) + 1:04d}",
+        "name": name,
+        "type": type,
+        "country": country,
+        "city": city or "",
+        "building_year": building_year or "",
+        "state": state or "Կանգուն",
+        "location": location or "",
+        "info": info or "",
+        "submitter_name": submitter_name or "",
+        "submitter_email": submitter_email or "",
+        "picture": picture_url,
+        "status": "pending",
+        "submitted_at": datetime.now(timezone.utc).isoformat(),
+        "note": None,
+    }
     SUBMISSIONS.append(data)
+    save_submissions(SUBMISSIONS)
     return {
         "message": "Շնորհակալություն։ Ձեր հայտն ստացվել է և կդիտարկվի մեր թիմի կողմից։",
         "id": data["id"]
     }
 
-@app.get("/api/submissions")
-def get_submissions():
-    return {"data": SUBMISSIONS, "total": len(SUBMISSIONS)}
+@app.get("/api/admin/submissions")
+def get_all_submissions(status: Optional[str] = None):
+    """Return all submissions, optionally filtered by status."""
+    result = SUBMISSIONS
+    if status:
+        result = [s for s in result if s["status"] == status]
+    # Sort by most recent first
+    result = sorted(result, key=lambda x: x["submitted_at"], reverse=True)
+    counts = {
+        "pending":  sum(1 for s in SUBMISSIONS if s["status"] == "pending"),
+        "approved": sum(1 for s in SUBMISSIONS if s["status"] == "approved"),
+        "rejected": sum(1 for s in SUBMISSIONS if s["status"] == "rejected"),
+        "total":    len(SUBMISSIONS),
+    }
+    return {"data": result, "counts": counts}
+
+@app.patch("/api/admin/submissions/{submission_id}")
+def update_submission_status(submission_id: str, update: StatusUpdate):
+    """Approve or reject a submission. Approving it adds it to the live catalog."""
+    submission = next((s for s in SUBMISSIONS if s["id"] == submission_id), None)
+    if not submission:
+        raise HTTPException(status_code=404, detail="Հայտը չի գտնվել")
+    if update.status not in ("approved", "rejected"):
+        raise HTTPException(status_code=400, detail="Կարգավիճակը պետք է լինի 'approved' կամ 'rejected'")
+
+    submission["status"] = update.status
+    submission["note"] = update.note
+    submission["reviewed_at"] = datetime.now(timezone.utc).isoformat()
+
+    if update.status == "approved":
+        # Add to live catalog
+        new_id = f"church_{len(CHURCHES) + 1:04d}"
+        new_church = {
+            "id": new_id,
+            "name": submission["name"],
+            "type": submission["type"],
+            "country": submission["country"],
+            "city": submission.get("city", ""),
+            "building_year": submission.get("building_year", ""),
+            "state": submission.get("state", "Չկան տեղեկություններ"),
+            "location": submission.get("location", ""),
+            "picture": "",
+            "info": submission.get("info", ""),
+        }
+        year_numeric = parse_year(new_church["building_year"])
+        new_church["year_numeric"] = year_numeric
+        new_church["century"] = get_century(year_numeric)
+        CHURCHES.append(new_church)
+        return {"message": "Հայտը հաստատվեց և ավելացվեց կատալոգում։", "church_id": new_id}
+
+    return {"message": "Հայտը մերժվեց։"}
 
 @app.post("/api/chat")
 async def chat(req: ChatMessage):

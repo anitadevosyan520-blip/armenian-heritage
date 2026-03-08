@@ -5,13 +5,12 @@ import {
 } from 'recharts'
 
 /* ─── Constants ──────────────────────────────────────────────────── */
-const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+const API = 'http://localhost:8000'
 const COLORS = ['#8B1A2B','#C9A574','#5C0F1C','#D4C4B0','#3D2B1F','#EDD9A3','#A83248','#8A6A2E']
-const STATE_COLORS = { 'Կանգուն':'#2E7D32', 'Ավերված':'#B71C1C', 'Կիսավեր':'#F57F17', 'Չկան տեղեկություններ':'#757575' }
-const STATE_CLASSES = { 'Կանգուն':'tag-standing', 'Ավերված':'tag-ruined', 'Կիսավեր':'tag-semi', 'Չկան տեղեկություններ':'tag-unknown' }
+const STATE_COLORS = { 'Կանգուն':'#2E7D32', 'Ավերված':'#B71C1C', 'Կիսավեր':'#F57F17', 'տեղեկություն չկա':'#757575', 'հիմնավեր':'#4A148C' }
+const STATE_CLASSES = { 'Կանգուն':'tag-standing', 'Ավերված':'tag-ruined', 'Կիսավեր':'tag-semi', 'տեղեկություն չկա':'tag-unknown', 'հիմնավեր':'tag-ruined' }
 const TABS = [
   { id:'catalog',   label:'Կատալոգ' },
-  { id:'map',       label:'Քարտեզ' },
   { id:'timeline',  label:'Ժամանակագրություն' },
   { id:'stats',     label:'Վիճակագրություն' },
   { id:'chat',      label:'Զրուցարան'},
@@ -76,7 +75,7 @@ function ChurchCard({ church, onClick }) {
           {church.name || '—'}
         </h3>
         <p style={{ fontSize:'0.82rem', color:'var(--text-medium)', marginBottom:8 }}>
-          {[church.city, church.country].filter(Boolean).join(', ')}
+          {[church.city, church.region].filter(b => b && b !== '-').join(', ') || '—'}
         </p>
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
           <span className={`tag ${stateClass(church.state)}`}>{church.state || '—'}</span>
@@ -112,10 +111,10 @@ function ChurchDrawer({ church, onClose }) {
 
   const details = [
     { icon: '🏛️', label: 'Տեսակ',               value: church.type },
-    { icon: '🌍', label: 'Երկիր',               value: church.country },
-    { icon: '📍', label: 'Քաղաք / Գյուղ',       value: church.city },
+    { icon: '🗺️', label: 'Մարզ',                value: church.region !== '-' ? church.region : null },
+    { icon: '📍', label: 'Գյուղ / Քաղաք',       value: church.city !== '-' ? church.city : null },
     { icon: '📅', label: 'Կառուցման տարեթիվ',   value: church.building_year },
-    { icon: '🗺️', label: 'Տեղագրություն',        value: church.location },
+    { icon: '📌', label: 'Տեղագրություն',        value: church.location },
   ].filter(d => d.value)
 
   return (
@@ -247,10 +246,124 @@ function ChurchDrawer({ church, onClose }) {
               </p>
             </>
           )}
+          {/* Feedback button */}
+          <div style={{ marginTop: 24, paddingTop: 16, borderTop: '1px solid var(--parchment)' }}>
+            <button
+              onClick={() => window.__openFeedback && window.__openFeedback(church)}
+              style={{
+                background: 'transparent', border: '1px solid var(--gold)',
+                color: 'var(--gold)', borderRadius: 6, padding: '8px 16px',
+                fontFamily: 'Cinzel,serif', fontSize: '0.72rem', letterSpacing: '0.08em',
+                cursor: 'pointer', width: '100%',
+              }}
+            >
+              ✦ Հայտնել սխալի մասին
+            </button>
+          </div>
         </div>
         </div> {/* end inner wrapper */}
       </div>
     </>
+  )
+}
+
+/* ─── Feedback Modal ──────────────────────────────────────────────── */
+function FeedbackModal({ church, onClose }) {
+  const [type, setType] = useState('error')
+  const [msg, setMsg] = useState('')
+  const [contact, setContact] = useState('')
+  const [sent, setSent] = useState(false)
+  const [loading, setLoading] = useState(false)
+
+  const submit = async () => {
+    if (!msg.trim()) return
+    setLoading(true)
+    try {
+      await fetch(`${API}/api/feedback`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          church_id: church?.id || null,
+          church_name: church?.name || null,
+          issue_type: type,
+          message: msg,
+          contact: contact || null,
+        })
+      })
+      setSent(true)
+    } catch { setSent(true) }
+    setLoading(false)
+  }
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 9999,
+      background: 'rgba(10,5,2,0.7)', display: 'flex',
+      alignItems: 'center', justifyContent: 'center', padding: 24,
+    }} onClick={onClose}>
+      <div style={{
+        background: 'var(--cream)', borderRadius: 12, padding: 28,
+        maxWidth: 440, width: '100%', position: 'relative',
+        border: '1px solid var(--gold)',
+      }} onClick={e => e.stopPropagation()}>
+        <button onClick={onClose} style={{
+          position: 'absolute', top: 12, right: 14,
+          background: 'none', border: 'none', fontSize: '1.2rem',
+          cursor: 'pointer', color: 'var(--text-light)',
+        }}>✕</button>
+
+        {sent ? (
+          <div style={{ textAlign: 'center', padding: '20px 0' }}>
+            <div style={{ fontSize: '2rem', marginBottom: 12 }}>✦</div>
+            <p style={{ fontFamily: 'Cinzel,serif', color: 'var(--crimson)', marginBottom: 8 }}>Շնորհակալություն</p>
+            <p style={{ fontSize: '0.88rem', color: 'var(--text-medium)' }}>Ձեր ֆիդբեքն ստացվեց։ Կդիտարկենք հնարավորինս շուտ։</p>
+          </div>
+        ) : (
+          <>
+            <h3 style={{ fontFamily: 'Cinzel,serif', color: 'var(--crimson)', marginBottom: 6, fontSize: '0.95rem' }}>
+              Հայտնել սխալի մասին
+            </h3>
+            {church && (
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-light)', marginBottom: 16 }}>
+                📍 {church.name || 'Անանուն'}
+              </p>
+            )}
+            <select value={type} onChange={e => setType(e.target.value)} style={{ width: '100%', marginBottom: 12 }}>
+              <option value="error">Սխալ տեղեկություն</option>
+              <option value="missing">Բացակայող տեղեկություն</option>
+              <option value="duplicate">Կրկնություն</option>
+              <option value="other">Այլ</option>
+            </select>
+            <textarea
+              placeholder="Նկարագրեք խնդիրը…"
+              value={msg}
+              onChange={e => setMsg(e.target.value)}
+              rows={4}
+              style={{ width: '100%', marginBottom: 12, resize: 'vertical', boxSizing: 'border-box' }}
+            />
+            <input
+              placeholder="Կապի հասցե (ոչ պարտադիր)"
+              value={contact}
+              onChange={e => setContact(e.target.value)}
+              style={{ width: '100%', marginBottom: 16, boxSizing: 'border-box' }}
+            />
+            <button
+              onClick={submit}
+              disabled={loading || !msg.trim()}
+              style={{
+                background: 'var(--crimson)', color: 'var(--cream)',
+                border: 'none', borderRadius: 6, padding: '10px 24px',
+                fontFamily: 'Cinzel,serif', fontSize: '0.8rem',
+                cursor: loading ? 'not-allowed' : 'pointer', width: '100%',
+                opacity: (!msg.trim() || loading) ? 0.6 : 1,
+              }}
+            >
+              {loading ? '…' : 'Ուղարկել'}
+            </button>
+          </>
+        )}
+      </div>
+    </div>
   )
 }
 
@@ -261,7 +374,7 @@ function CatalogTab({ filters }) {
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState(null)
   const [search, setSearch] = useState('')
-  const [filter, setFilter] = useState({ country:'', type:'', state:'' })
+  const [filter, setFilter] = useState({ region:'', type:'', state:'' })
   const [page, setPage] = useState(1)
   const searchRef = useRef(null)
 
@@ -270,7 +383,7 @@ function CatalogTab({ filters }) {
     try {
       const params = new URLSearchParams({ page: p, per_page: 24 })
       if (search) params.set('search', search)
-      if (filter.country) params.set('country', filter.country)
+      if (filter.region) params.set('region', filter.region)
       if (filter.type) params.set('type', filter.type)
       if (filter.state) params.set('state', filter.state)
       const r = await fetch(`${API}/api/churches?${params}`)
@@ -297,14 +410,14 @@ function CatalogTab({ filters }) {
       }}>
         <input
           ref={searchRef}
-          placeholder="🔍  Որոնել անունով, քաղաքով, երկրով…"
+          placeholder="🔍  Որոնել անունով, քաղաքով, մարզով…"
           value={search}
           onChange={e => setSearch(e.target.value)}
           style={{ minWidth:0 }}
         />
-        <select value={filter.country} onChange={e => setFilter(f => ({ ...f, country: e.target.value }))}>
-          <option value="">🌍 Բոլոր երկրները</option>
-          {(filters.countries || []).map(c => <option key={c} value={c}>{c}</option>)}
+        <select value={filter.region} onChange={e => setFilter(f => ({ ...f, region: e.target.value }))}>
+          <option value="">🗺️ Բոլոր մարզերը</option>
+          {(filters.regions || []).map(r => <option key={r} value={r}>{r}</option>)}
         </select>
         <select value={filter.type} onChange={e => setFilter(f => ({ ...f, type: e.target.value }))}>
           <option value="">🏛️ Բոլոր տեսակները</option>
@@ -508,7 +621,7 @@ function StatsTab() {
         <StatCard label="ԿԱՆԳՈՒՆ"   value={stats.standing}   color="#2E7D32" />
         <StatCard label="ԱՎԵՐՎԱԾ"   value={stats.ruined}     color="#B71C1C" />
         <StatCard label="ԿԻՍԱՎԵՐ"   value={stats.semi_ruined} color="#F57F17" />
-        <StatCard label="ԵՐԿՐՆԵՐ"   value={stats.countries}  color="var(--dark-gold)" />
+        <StatCard label="ՄԱՐԶԵՐ"    value={stats.regions}    color="var(--dark-gold)" />
       </div>
 
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:20 }}>
@@ -562,15 +675,17 @@ function StatsTab() {
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:20 }}>
         <div className="card" style={{ padding:20 }}>
           <h3 style={{ fontFamily:'Cinzel,serif', fontSize:'0.88rem', color:'var(--crimson)', marginBottom:16, letterSpacing:'0.08em' }}>
-            ԸՍՏ ԵՐԿՐԻ (ԹՈՓ 10)
+            ԸՍՏ ՄԱՐԶԻ
           </h3>
           <ResponsiveContainer width="100%" height={280}>
-            <BarChart layout="vertical" data={stats.by_country.slice(0,10)} margin={{ left:10, right:20 }}>
+            <BarChart layout="vertical" data={stats.by_region || []} margin={{ left:10, right:20 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--stone)" horizontal={false} />
               <XAxis type="number" tick={{ fontFamily:'Cinzel,serif', fontSize:10, fill:'var(--text-medium)' }} />
-              <YAxis type="category" dataKey="name" tick={{ fontFamily:'Cinzel,serif', fontSize:10, fill:'var(--text-medium)' }} width={90} />
+              <YAxis type="category" dataKey="name" tick={{ fontFamily:'Cinzel,serif', fontSize:11, fill:'var(--text-medium)' }} width={100} />
               <Tooltip content={<CustomTooltip />} />
-              <Bar dataKey="value" fill="var(--crimson)" radius={[0,4,4,0]} name="Կառույց" />
+              <Bar dataKey="value" radius={[0,4,4,0]} name="Կառույց">
+                {(stats.by_region || []).map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -1124,35 +1239,24 @@ const DEMO_CHURCHES = [
   {
     id: '1',
     type: 'Եկեղեցի',
-    name: 'Սուրբ Աստվածածին',
-    building_year: '1797',
-    country: 'Ադրբեջան',
-    city: 'Բաքու',
-    state: 'Կիսավեր',
-    picture: 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Views_of_Ichery_Sheher_1987.jpg/960px-Views_of_Ichery_Sheher_1987.jpg',
-    info: 'Կառույցը գտնվում է Իչերի Շեհեր պատմական թաղամասում։'
-  },
-  {
-    id: '7',
-    type: 'Եկեղեցի',
     name: 'Սուրբ Հովհաննես',
-    building_year: '1633',
-    country: 'Ադրբեջան',
-    city: 'Գյանջա',
+    building_year: '4-րդ դար',
+    region: 'Արագածոտն',
+    city: 'Ուջան',
     state: 'Կանգուն',
-    picture: 'https://upload.wikimedia.org/wikipedia/commons/thumb/3/3d/Saint_Iohann_church_in_Ganja_1.jpg/960px-Saint_Iohann_church_in_Ganja_1.jpg',
-    info: ''
+    picture: 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ae/%D5%88%D6%82%D5%BB%D5%A1%D5%B6_%D5%A5%D5%AF%D5%A5%D5%B2%D5%A5%D6%81%D5%AB3.2.2-13.JPG/250px-%D5%88%D6%82%D5%BB%D5%A1%D5%B6_%D5%A5%D5%AF%D5%A5%D5%B2%D5%A5%D6%81%D5%AB3.2.2-13.JPG',
+    info: 'Հայաuтанի հնագույն պահпанված еκеgecineরিcandan mekin'
   },
   {
-    id: '175',
-    type: 'Եկեղեցի',
-    name: 'Սուրբ Փրկիչ',
-    building_year: '1891',
-    country: 'ԱՄՆ',
-    city: 'Վուսթեր',
-    state: 'Կանգուն',
-    picture: 'https://upload.wikimedia.org/wikipedia/commons/4/43/Worcester_Armenian_church.png',
-    info: 'ԱՄՆ-ի ամենահին հայկական եկեղեցիներից մեկը։'
+    id: '3',
+    type: 'Տաճар',
+    name: 'Сурб Карапет',
+    building_year: '1216',
+    region: 'Արагаծoтн',
+    city: 'Ohанаван',
+    state: 'Կангун',
+    picture: 'https://upload.wikimedia.org/wikipedia/commons/thumb/f/f6/Hovhannavank_Monastery%2C_09_June_2019.jpg/500px-Hovhannavank_Monastery%2C_09_June_2019.jpg',
+    info: ''
   },
 ]
 
@@ -1168,7 +1272,7 @@ const DEMO_STATS = {
   standing: 55,
   ruined: 4,
   semi_ruined: 3,
-  countries: 18,
+  regions: 11,
   by_type: [
     { name: 'Եկեղեցի', value: 54 },
     { name: 'Տաճար',   value: 5  },
@@ -1181,11 +1285,12 @@ const DEMO_STATS = {
     { name: 'Կիսավեր',              value: 3  },
     { name: 'Չկան տեղեկություններ', value: 1  },
   ],
-  by_country: [
-    { name: 'ԱՄՆ',      value: 20 },
-    { name: 'Ֆրանսիա',  value: 13 },
-    { name: 'Բրազիլիա', value: 9  },
-    { name: 'Կանադա',   value: 7  },
+  by_region: [
+    { name: 'Лорри',      value: 226 },
+    { name: 'Сюник',      value: 204 },
+    { name: 'Тавуш',      value: 158 },
+    { name: 'Арагацотн',  value: 152 },
+    { name: 'Гегаркуник', value: 130 },
   ],
   by_century: [
     { name: '13-ին դար', value: 1,  century: 13 },
@@ -1236,6 +1341,7 @@ function Header() {
 export default function App() {
   const [tab, setTab] = useState('catalog')
   const [filters, setFilters] = useState({})
+  const [feedbackChurch, setFeedbackChurch] = useState(null)
 
   useEffect(() => {
     fetch(`${API}/api/filters`)
@@ -1244,8 +1350,16 @@ export default function App() {
       .catch(() => {})
   }, [])
 
+  useEffect(() => {
+    window.__openFeedback = (church) => setFeedbackChurch(church)
+    return () => { delete window.__openFeedback }
+  }, [])
+
   return (
     <div style={{ minHeight:'100vh', display:'flex', flexDirection:'column' }}>
+      {feedbackChurch !== null && (
+        <FeedbackModal church={feedbackChurch} onClose={() => setFeedbackChurch(null)} />
+      )}
       <Header />
 
       <nav style={{
@@ -1277,7 +1391,6 @@ export default function App() {
       <main style={{ flex:1, maxWidth:1200, margin:'0 auto', width:'100%', padding:'32px 32px 60px' }}>
         <div key={tab} className="fade-in">
           {tab === 'catalog'  && <CatalogTab   filters={filters} />}
-          {tab === 'map'      && <MapTab />}
           {tab === 'timeline' && <TimelineTab />}
           {tab === 'stats'    && <StatsTab />}
           {tab === 'chat'     && <ChatbotTab />}

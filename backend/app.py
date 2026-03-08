@@ -70,21 +70,23 @@ def parse_year(year_str: str) -> Optional[int]:
         return century * 100 - 50  # midpoint of century
     return None
 
-def get_century(year_str: str) -> Optional[int]:
-    """Get century number from date string."""
+def get_century(year_val) -> Optional[int]:
+    """Get century number from date string or int year."""
+    if year_val is None:
+        return None
+    if isinstance(year_val, int):
+        return (year_val - 1) // 100 + 1
+    year_str = str(year_val).strip()
     if not year_str or year_str in ["-", ""]:
         return None
-    # "17-րդ դար" → 17
     match = re.search(r'^(\d+)-(?:րդ|ին|ֆ)', year_str)
     if match:
         return int(match.group(1))
-    # "1633" → 17
     match = re.search(r'^(\d{4})', year_str)
     if match:
         year = int(match.group(1))
         return (year - 1) // 100 + 1
-    # "20-րդ դար"
-    match = re.search(r'(\d+).*դար', year_str)
+    match = re.search(r'(\d+).*դар', year_str)
     if match:
         return int(match.group(1))
     return None
@@ -104,18 +106,20 @@ with open("churches.json", encoding="utf-8") as f:
 CHURCHES = []
 for idx, c in enumerate(raw_churches):
     church = {
-        "id": str(c.get("ID") or idx + 1),
-        "type": c.get("Type", "").strip(),
-        "name": (c.get("Name") or "").strip(),
-        "building_year": clean_value(c.get("Building year", "")),
-        "year_numeric": parse_year(c.get("Building year", "")),
-        "century": get_century(c.get("Building year", "")),
-        "country": (c.get("Country") or "").strip(),
-        "city": (c.get("City/Village") or "").strip(),
-        "state": (c.get("State") or "").strip(),
-        "location": clean_value(c.get("Location", "")),
-        "picture": clean_value(c.get("Picture", "")),
-        "info": (c.get("Other  info") or "").strip(),
+        "id": str(c.get("id") or idx + 1),
+        "type": clean_value(c.get("տեսակ", "")) or "",
+        "name": clean_value(c.get("անվանում", "")) or "",
+        "building_year": clean_value(c.get("կառուցման_տարեթիվ", "")),
+        "year_numeric": parse_year(c.get("կառուցման_տարեթիվ", "")),
+        "century": get_century(parse_year(c.get("կառուցման_տարեթիվ", ""))),
+        "region": clean_value(c.get("մարզ", "")) or "",
+        "country": "Հայաստան",
+        "city": clean_value(c.get("գյուղ_քաղաք", "")) or "",
+        "state": clean_value(c.get("կարգավիճակ", "")) or "",
+        "location": clean_value(c.get("տեղակայություն", "")),
+        "picture": clean_value(c.get("լուսանկար", "")),
+        "info": (c.get("այլ_տեղեկություններ") or "").strip(),
+        "source": (c.get("_source") or "").strip(),
     }
     CHURCHES.append(church)
 
@@ -138,6 +142,7 @@ def root():
 @app.get("/api/churches")
 def get_churches(
     country: Optional[str] = None,
+    region: Optional[str] = None,
     type: Optional[str] = None,
     state: Optional[str] = None,
     century: Optional[int] = None,
@@ -148,6 +153,8 @@ def get_churches(
     result = CHURCHES
     if country:
         result = [c for c in result if c["country"] == country]
+    if region:
+        result = [c for c in result if c["region"] == region]
     if type:
         result = [c for c in result if c["type"] == type]
     if state:
@@ -159,7 +166,7 @@ def get_churches(
         result = [c for c in result if
                   s in c["name"].lower() or
                   s in c["city"].lower() or
-                  s in c["country"].lower() or
+                  s in c["region"].lower() or
                   s in (c["info"] or "").lower()]
 
     total = len(result)
@@ -183,17 +190,17 @@ def get_church(church_id: str):
 @app.get("/api/filters")
 def get_filters():
     return {
-        "countries": sorted(set(c["country"] for c in CHURCHES if c["country"])),
-        "types": sorted(set(c["type"] for c in CHURCHES if c["type"])),
-        "states": sorted(set(c["state"] for c in CHURCHES if c["state"])),
+        "regions": sorted(set(c["region"] for c in CHURCHES if c["region"] and c["region"] != "-")),
+        "types": sorted(set(c["type"] for c in CHURCHES if c["type"] and c["type"] != "-")),
+        "states": sorted(set(c["state"] for c in CHURCHES if c["state"] and c["state"] != "-")),
         "centuries": sorted(set(c["century"] for c in CHURCHES if c["century"])),
     }
 
 @app.get("/api/stats")
 def get_stats():
-    by_type = Counter(c["type"] for c in CHURCHES if c["type"])
-    by_state = Counter(c["state"] for c in CHURCHES if c["state"])
-    by_country = Counter(c["country"] for c in CHURCHES if c["country"])
+    by_type = Counter(c["type"] for c in CHURCHES if c["type"] and c["type"] != "-")
+    by_state = Counter(c["state"] for c in CHURCHES if c["state"] and c["state"] != "-")
+    by_region = Counter(c["region"] for c in CHURCHES if c["region"] and c["region"] != "-")
     by_century = Counter(c["century"] for c in CHURCHES if c["century"])
 
     # Top names (strip prefixes for grouping)
@@ -251,15 +258,15 @@ def get_stats():
     return {
         "by_type": [{"name": k, "value": v} for k, v in sorted(by_type.items(), key=lambda x: x[1], reverse=True)],
         "by_state": [{"name": k, "value": v} for k, v in sorted(by_state.items(), key=lambda x: x[1], reverse=True)],
-        "by_country": [{"name": k, "value": v} for k, v in sorted(by_country.items(), key=lambda x: x[1], reverse=True)[:15]],
+        "by_region": [{"name": k, "value": v} for k, v in sorted(by_region.items(), key=lambda x: x[1], reverse=True)],
         "by_century": [{"name": f"{k}–րդ դ.", "value": v, "century": k} for k, v in sorted(by_century.items())],
         "top_names": [{"name": k, "value": v} for k, v in name_counts.most_common(15)],
-        "timeline": timeline[:50],
+        "timeline": timeline,
         "total": len(CHURCHES),
         "standing": sum(1 for c in CHURCHES if c["state"] == "Կանգուն"),
         "ruined": sum(1 for c in CHURCHES if c["state"] == "Ավերված"),
         "semi_ruined": sum(1 for c in CHURCHES if c["state"] == "Կիսավեր"),
-        "countries": len(set(c["country"] for c in CHURCHES if c["country"])),
+        "regions": len(set(c["region"] for c in CHURCHES if c["region"] and c["region"] != "-")),
     }
 
 @app.post("/api/submit")
@@ -363,6 +370,46 @@ def update_submission_status(submission_id: str, update: StatusUpdate):
         return {"message": "Հայտը հաստատվեց և ավելացվեց կատալոգում։", "church_id": new_id}
 
     return {"message": "Հայտը մերժվեց։"}
+
+FEEDBACKS_FILE = "feedbacks.json"
+
+def load_feedbacks():
+    if os.path.exists(FEEDBACKS_FILE):
+        with open(FEEDBACKS_FILE, encoding="utf-8") as f:
+            return json.load(f)
+    return []
+
+def save_feedbacks(feedbacks):
+    with open(FEEDBACKS_FILE, "w", encoding="utf-8") as f:
+        json.dump(feedbacks, f, ensure_ascii=False, indent=2)
+
+FEEDBACKS = load_feedbacks()
+
+class FeedbackMessage(BaseModel):
+    church_id: Optional[str] = None
+    church_name: Optional[str] = None
+    issue_type: str  # "error" | "missing" | "other"
+    message: str
+    contact: Optional[str] = None
+
+@app.post("/api/feedback")
+async def submit_feedback(req: FeedbackMessage):
+    entry = {
+        "id": f"fb_{len(FEEDBACKS) + 1:04d}",
+        "church_id": req.church_id,
+        "church_name": req.church_name,
+        "issue_type": req.issue_type,
+        "message": req.message,
+        "contact": req.contact,
+        "submitted_at": datetime.now(timezone.utc).isoformat(),
+    }
+    FEEDBACKS.append(entry)
+    save_feedbacks(FEEDBACKS)
+    return {"message": "Շնորհակալություն ֆիդբեքի համար։ Կդիտարկենք հնարավորինս շուտ։", "id": entry["id"]}
+
+@app.get("/api/admin/feedbacks")
+def get_feedbacks():
+    return {"data": sorted(FEEDBACKS, key=lambda x: x["submitted_at"], reverse=True), "total": len(FEEDBACKS)}
 
 @app.post("/api/chat")
 async def chat(req: ChatMessage):

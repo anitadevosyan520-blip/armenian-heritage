@@ -5,7 +5,7 @@ import {
 } from 'recharts'
 
 /* ─── Constants ──────────────────────────────────────────────────── */
-const API = 'http://localhost:8000'
+const API = import.meta.env.VITE_API_URL || "http://localhost:8000"
 const COLORS = ['#8B1A2B','#C9A574','#5C0F1C','#D4C4B0','#3D2B1F','#EDD9A3','#A83248','#8A6A2E']
 const STATE_COLORS = { 'Կանգուն':'#2E7D32', 'Ավերված':'#B71C1C', 'Կիսավեր':'#F57F17', 'տեղեկություն չկա':'#757575', 'հիմնավեր':'#4A148C' }
 const STATE_CLASSES = { 'Կանգուն':'tag-standing', 'Ավերված':'tag-ruined', 'Կիսավեր':'tag-semi', 'տեղեկություն չկա':'tag-unknown', 'հիմնավեր':'tag-ruined' }
